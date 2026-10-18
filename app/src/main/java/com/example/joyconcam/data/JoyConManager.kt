@@ -133,16 +133,41 @@ class JoyConManager(private val context: Context) {
         _state.value = _state.value.copy(palette = palette)
     }
 
+    private var restartJob: Job? = null
+    private fun restartStreamDebounced() {
+        restartJob?.cancel()
+        restartJob = CoroutineScope(Dispatchers.IO).launch {
+            delay(350)
+            if (isRunning.get()) {
+                stop()
+                delay(200)
+                start()
+            }
+        }
+    }
+
     fun setExposure(exposureUs: Int) {
+        if (_state.value.exposureUs == exposureUs) return
         _state.value = _state.value.copy(exposureUs = exposureUs)
+        if (isRunning.get()) {
+            restartStreamDebounced()
+        }
     }
 
     fun setDigitalGain(gain: Int) {
+        if (_state.value.digitalGain == gain) return
         _state.value = _state.value.copy(digitalGain = gain)
+        if (isRunning.get()) {
+            restartStreamDebounced()
+        }
     }
 
     fun setLeds(leds: Int) {
+        if (_state.value.irLeds == leds) return
         _state.value = _state.value.copy(irLeds = leds)
+        if (isRunning.get()) {
+            restartStreamDebounced()
+        }
     }
 
     fun start() {
@@ -398,7 +423,8 @@ class JoyConManager(private val context: Context) {
     private suspend fun initializeIrSensor(): Boolean = withContext(Dispatchers.IO) {
         val res = _state.value.currentResolution
         val exposure = _state.value.exposureUs
-        val encodedExposure = ((31200 * exposure) / 1000).coerceIn(0, 0x4920)
+        val isMaxExposure = exposure >= 2000
+        val encodedExposure = ((31200L * exposure) / 1000).coerceIn(0, 0xFFFF).toInt()
         val digitalGain = _state.value.digitalGain
         val leds = _state.value.irLeds
 
@@ -593,8 +619,8 @@ class JoyConManager(private val context: Context) {
         buf[17] = 0x01; buf[18] = 0x30; buf[19] = (encodedExposure and 0xFF).toByte()
         // Reg 3: 0x0131 (Exposure MSB)
         buf[20] = 0x01; buf[21] = 0x31; buf[22] = ((encodedExposure shr 8) and 0xFF).toByte()
-        // Reg 4: 0x0132 (Manual Exposure enable)
-        buf[23] = 0x01; buf[24] = 0x32; buf[25] = 0x00
+        // Reg 4: 0x0132 (Exposure Mode: 0 = manual, 1 = max exposure)
+        buf[23] = 0x01; buf[24] = 0x32; buf[25] = (if (isMaxExposure) 0x01 else 0x00).toByte()
         // Reg 5: 0x0010 (IR LEDs)
         buf[26] = 0x00; buf[27] = 0x10; buf[28] = leds.toByte()
         // Reg 6: 0x012e (Digital Gain LSB 4 bits)

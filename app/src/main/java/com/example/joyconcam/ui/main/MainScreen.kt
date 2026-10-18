@@ -353,14 +353,14 @@ fun MainScreen(
 
                 // Exposure
                 Text(
-                    text = "Belichtungszeit: ${state.exposureUs} μs",
+                    text = "Belichtungszeit: ${if (state.exposureUs >= 2000) "2000 μs (MAX Hardware)" else "${state.exposureUs} μs"}",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Slider(
                     value = state.exposureUs.toFloat(),
                     onValueChange = { viewModel.setExposure(it.toInt()) },
-                    valueRange = 50f..600f
+                    valueRange = 50f..2000f
                 )
 
                 // Digital Gain
@@ -372,8 +372,7 @@ fun MainScreen(
                 Slider(
                     value = state.digitalGain.toFloat(),
                     onValueChange = { viewModel.setDigitalGain(it.toInt()) },
-                    valueRange = 1f..16f,
-                    steps = 15
+                    valueRange = 1f..64f
                 )
             }
         }
